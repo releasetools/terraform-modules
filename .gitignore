@@ -1,0 +1,9 @@
+# Terraform working files. A module doesn't commit its lock file — consumers
+# generate their own.
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars
+!*.tfvars.example
