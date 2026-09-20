@@ -12,7 +12,7 @@ provider "github" {
 }
 
 module "repo" {
-  source = "git::https://github.com/releasetools/terraform-modules.git//modules/github-repo?ref=v0.2.0"
+  source = "git::https://github.com/releasetools/terraform-modules.git//modules/github-repo?ref=v0.3.0"
 
   github_owner = "your-org"
   name         = "my-service"
@@ -20,6 +20,9 @@ module "repo" {
   visibility   = "private"
 }
 ```
+
+The example targets the pending `v0.3.0` release. Until it is tagged, use a local
+checkout as the module source.
 
 You supply the `github` provider and any backend. The module has no provider or
 backend blocks of its own.
@@ -53,10 +56,50 @@ check; then the module needs no secret permissions.
 `github_owner` and `name` are required. Everything else has a default: the
 repository settings (visibility, features, merge buttons, sign-off), `labels`
 (GitHub's stock set, managed authoritatively), `environments`, `allowed_actions`,
-`ruleset_enforcement`, and `required_secrets`. The ruleset and Actions are
-toggleable: `manage_ruleset`, `ruleset_require_pull_request`,
-`ruleset_required_signatures`, and `actions_enabled` (all default to the secure
-behavior). See `variables.tf`.
+`ruleset`, and `required_secrets`. `manage_ruleset` and `actions_enabled` both
+default to `true`. See [`variables.tf`](variables.tf) and [`ruleset.tf`](ruleset.tf) for the input definitions.
+
+## Default branch ruleset
+
+The [`ruleset` submodule](modules/ruleset) applies the default branch rules.
+[`ruleset.tf`](ruleset.tf) wires it into this module and defines the forwarding
+inputs. The submodule owns the typed configuration, defaults, and validation.
+
+The default ruleset requires linear, signed history and pull requests with zero
+approvals. It permits squash and rebase merges and blocks deletion and force
+pushes. See the [submodule documentation](modules/ruleset/README.md) for the full
+configuration and the two unmanaged review settings. To require a CI check such
+as `allow`, add a [`required_status_checks` rule](modules/ruleset/README.md#required-status-checks).
+
+Set `ruleset` to an object matching the submodule's
+[`variables.tf`](modules/ruleset/variables.tf) to customize the rules. `null`
+uses the submodule defaults. These inputs take precedence over that object:
+
+| Input | Behavior |
+| --- | --- |
+| `manage_ruleset = false` | Omit the ruleset; destroy it on apply if already managed |
+| `ruleset_enforcement` | Override enforcement; `null` uses the object |
+| `ruleset_require_pull_request = false` | Omit the pull request rule |
+| `ruleset_required_signatures` | Override the signature requirement; `null` uses the object |
+| `ruleset_allowed_merge_methods` | Override the pull request merge methods; `null` uses the object |
+
+The repository's merge buttons are separate inputs. `allow_rebase_merge = true`
+enables the rebase button; the default repository settings enable squash merges.
+
+### Existing rulesets
+
+Terraform's `moved` blocks map either previous ruleset resource address to
+`module.ruleset[0].github_repository_ruleset.main`, preserving the managed
+ruleset during upgrades.
+
+Import an existing ruleset that Terraform does not yet manage:
+
+```sh
+terraform import 'module.repo.module.ruleset[0].github_repository_ruleset.main' my-service:123456
+```
+
+The repository itself must also be in this module's state. To manage only its
+ruleset, call the [submodule directly](modules/ruleset/README.md#usage).
 
 ## Outputs
 
@@ -66,7 +109,7 @@ behavior). See `variables.tf`.
 ## Requirements
 
 - Terraform >= 1.10
-- `integrations/github` ~> 6.0
+- `integrations/github` ~> 6.13
 - `hashicorp/http` ~> 3.0 (used to detect the owner type for the secret check)
 
 See [`examples/complete`](examples/complete) for a runnable example.
