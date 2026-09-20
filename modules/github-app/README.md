@@ -53,7 +53,7 @@ provider "github" {
 }
 
 module "app_install" {
-  source = "git::https://github.com/releasetools/terraform-modules.git//modules/github-app?ref=v0.1.0"
+  source = "git::https://github.com/releasetools/terraform-modules.git//modules/github-app?ref=v0.2.0"
 
   app_slug        = "your-app-slug"
   installation_id = "12345678"

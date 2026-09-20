@@ -12,7 +12,7 @@ provider "github" {
 }
 
 module "repo" {
-  source = "git::https://github.com/releasetools/terraform-modules.git//modules/github-repo?ref=v0.1.0"
+  source = "git::https://github.com/releasetools/terraform-modules.git//modules/github-repo?ref=v0.2.0"
 
   github_owner = "your-org"
   name         = "my-service"
