@@ -57,77 +57,48 @@ check; then the module needs no secret permissions.
 repository settings (visibility, features, merge buttons, sign-off), `labels`
 (GitHub's stock set, managed authoritatively), `environments`, `allowed_actions`,
 `ruleset`, and `required_secrets`. `manage_ruleset` and `actions_enabled` both
-default to `true`. See [`variables.tf`](variables.tf) for the full input definitions.
+default to `true`. See [`variables.tf`](variables.tf) and [`ruleset.tf`](ruleset.tf) for the input definitions.
 
 ## Default branch ruleset
 
-Every repository gets the `main` ruleset by default. The `ruleset` variable holds
-the provider-supported configuration captured from
-[`releasetools/homebrew-tap` ruleset 23733932](https://github.com/releasetools/homebrew-tap/rules/23733932)
-on 2026-09-20, in GitHub's API shape. It contains the writable configuration;
-repository identity, timestamps, and other response metadata are omitted.
+The [`ruleset` submodule](modules/ruleset) applies the default branch rules.
+[`ruleset.tf`](ruleset.tf) wires it into this module and defines the forwarding
+inputs. The submodule owns the typed configuration, defaults, and validation.
 
-| Setting | Default |
-| --- | --- |
-| Enforcement | `active` |
-| Branches | `include = ["~DEFAULT_BRANCH"]`, `exclude = []` |
-| Bypass actors | None |
-| Deletion and force pushes | Blocked |
-| Linear history and signed commits | Required |
-| Pull requests | Required, with 0 approving reviews |
-| Merge methods | `squash`, `rebase` |
-| Stale review dismissal, code owner review, last push approval, resolved review threads | All `false` |
-| Required reviewers | None |
+The default ruleset requires linear, signed history and pull requests with zero
+approvals. It permits squash and rebase merges and blocks deletion and force
+pushes. See the [submodule documentation](modules/ruleset/README.md) for the full
+configuration and the two unmanaged review settings.
 
-The repository's merge buttons are separate inputs. `allow_rebase_merge = true`
-enables the rebase button; the default repository settings enable squash merges.
-The ruleset blocks merge commits on matching branches even when the repository
-allows that button elsewhere.
-
-Copy the `ruleset` default from `variables.tf` to customize the managed settings.
-Its `rules` list supports the five captured rule types. Omitting a rule removes
-that requirement. The existing inputs take precedence over the object:
+Set `ruleset` to an object matching the submodule's
+[`variables.tf`](modules/ruleset/variables.tf) to customize the rules. `null`
+uses the captured defaults. These inputs take precedence over that object:
 
 | Input | Behavior |
 | --- | --- |
-| `manage_ruleset = false` | Omit the ruleset |
+| `manage_ruleset = false` | Omit the ruleset; destroy it on apply if already managed |
 | `ruleset_enforcement` | Override enforcement; `null` uses the object |
 | `ruleset_require_pull_request = false` | Omit the pull request rule |
 | `ruleset_required_signatures` | Override the signature requirement; `null` uses the object |
 | `ruleset_allowed_merge_methods` | Override the pull request merge methods; `null` uses the object |
 
-For example, seeding a repository with existing history uses:
-
-```hcl
-ruleset_enforcement = "disabled"
-```
-
-Set it to `"active"` after pushing the history. `manage_ruleset = false` removes
-an existing managed ruleset from GitHub on the next apply.
-
-### Unmanaged review settings
-
-`dismissal_restriction` and `require_extra_approval_for_unattributed_changes`
-are omitted from the module's inputs because the
-[GitHub provider schema](https://github.com/integrations/terraform-provider-github/blob/v6.13.0/github/resource_github_repository_ruleset.go)
-does not expose them. Terraform neither configures them nor detects their drift.
-GitHub determines their values when the request omits them; omission does not
-mean disabling either setting.
-
-The captured source ruleset has dismissal restrictions disabled and extra
-approval for unattributed changes enabled. The API fixture records those values
-as reference data; the module manages the remaining settings.
+The repository's merge buttons are separate inputs. `allow_rebase_merge = true`
+enables the rebase button; the default repository settings enable squash merges.
 
 ### Existing rulesets
 
-Import a ruleset already on a repository before applying this module to it:
+Terraform's `moved` blocks map either previous ruleset resource address to
+`module.ruleset[0].github_repository_ruleset.main`, preserving the managed
+ruleset during upgrades.
+
+Import an existing ruleset that Terraform does not yet manage:
 
 ```sh
-terraform import 'module.repo.github_repository_ruleset.main[0]' homebrew-tap:23733932
+terraform import 'module.repo.module.ruleset[0].github_repository_ruleset.main' homebrew-tap:23733932
 ```
 
-The repository itself must also be in the module's state. Adjust the module
-address and repository name to match the caller.
+The repository itself must also be in this module's state. To manage only its
+ruleset, call the [submodule directly](modules/ruleset/README.md#usage).
 
 ## Outputs
 
