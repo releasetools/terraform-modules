@@ -6,15 +6,13 @@
 
 The github-repo module's default ruleset requires linear, signed history
 and pull requests, permits squash and rebase merges, and blocks deletion
-and force pushes. The ruleset input captures the GitHub API configuration
-and supports customization. To permit merge commits, remove
+and force pushes. The ruleset input exposes the settings supported by the
+GitHub provider. To permit merge commits, remove
 required_linear_history from ruleset.rules and set
-ruleset_allowed_merge_methods to ["squash", "merge"]. Configure the
-Mastercard/restapi provider alongside the GitHub provider; both can use the
-same token. Existing rulesets must be imported at restapi_object.main[0]
-before applying. The module sends every configured rule parameter and repairs
-drift, including dismissal restrictions and extra approval for unattributed
-changes.
+ruleset_allowed_merge_methods to ["squash", "merge"]. The module uses the
+GitHub provider and preserves the existing ruleset resource address. Dismissal
+restrictions and extra approval for unattributed changes remain outside
+Terraform's control. GitHub provider 6.13 or later within version 6 is required.
 
 ### Added
 

@@ -1,6 +1,5 @@
 mock_provider "github" {}
 mock_provider "http" {}
-mock_provider "restapi" {}
 
 variables {
   github_owner = "example"
@@ -11,13 +10,47 @@ run "captured_defaults" {
   command = plan
 
   assert {
-    condition     = restapi_object.main[0].data == jsonencode(jsondecode(file("tests/fixtures/main-ruleset.json")))
-    error_message = "The API payload must match the complete captured configuration, including both review fields."
+    condition = jsonencode(var.ruleset) == jsonencode(merge(
+      jsondecode(file("tests/fixtures/main-ruleset.json")),
+      { rules = [for rule in jsondecode(file("tests/fixtures/main-ruleset.json")).rules : {
+        type = rule.type
+        parameters = try({ for key, value in rule.parameters : key => value
+          if !contains(["dismissal_restriction", "require_extra_approval_for_unattributed_changes"], key)
+        }, null)
+      }] }
+    ))
+    error_message = "The default must capture every provider-supported field from the GitHub API configuration."
   }
 
   assert {
-    condition     = restapi_object.main[0].path == "/repos/example/example/rulesets"
-    error_message = "The ruleset must belong to the module's repository."
+    condition = (
+      length(github_repository_ruleset.main) == 1 &&
+      github_repository_ruleset.main[0].name == "main" &&
+      github_repository_ruleset.main[0].target == "branch" &&
+      github_repository_ruleset.main[0].enforcement == "active" &&
+      github_repository_ruleset.main[0].conditions[0].ref_name[0].include == tolist(["~DEFAULT_BRANCH"]) &&
+      length(github_repository_ruleset.main[0].conditions[0].ref_name[0].exclude) == 0 &&
+      length(github_repository_ruleset.main[0].bypass_actors) == 0
+    )
+    error_message = "Every repository must get the active default-branch ruleset without bypass actors."
+  }
+
+  assert {
+    condition = (
+      github_repository_ruleset.main[0].rules[0].deletion &&
+      github_repository_ruleset.main[0].rules[0].non_fast_forward &&
+      github_repository_ruleset.main[0].rules[0].required_linear_history &&
+      github_repository_ruleset.main[0].rules[0].required_signatures
+    )
+    error_message = "The default branch must block deletion and force pushes and require linear, signed history."
+  }
+
+  assert {
+    condition = jsonencode(github_repository_ruleset.main[0].rules[0].pull_request[0]) == jsonencode({
+      for key, value in jsondecode(file("tests/fixtures/main-ruleset.json")).rules[4].parameters : key => value
+      if !contains(["dismissal_restriction", "require_extra_approval_for_unattributed_changes"], key)
+    })
+    error_message = "Every provider-supported pull request parameter must match the captured ruleset."
   }
 }
 
@@ -32,9 +65,9 @@ run "legacy_overrides" {
 
   assert {
     condition = (
-      jsondecode(restapi_object.main[0].data).enforcement == "disabled" &&
-      !contains([for rule in jsondecode(restapi_object.main[0].data).rules : rule.type], "required_signatures") &&
-      one([for rule in jsondecode(restapi_object.main[0].data).rules : rule.parameters.allowed_merge_methods if rule.type == "pull_request"]) == ["squash"]
+      github_repository_ruleset.main[0].enforcement == "disabled" &&
+      !github_repository_ruleset.main[0].rules[0].required_signatures &&
+      github_repository_ruleset.main[0].rules[0].pull_request[0].allowed_merge_methods == tolist(["squash"])
     )
     error_message = "Existing inputs must override the captured defaults."
   }
@@ -48,9 +81,11 @@ run "omit_pull_request" {
   }
 
   assert {
-    condition = toset([for rule in jsondecode(restapi_object.main[0].data).rules : rule.type]) == toset([
-      "deletion", "non_fast_forward", "required_linear_history", "required_signatures",
-    ])
+    condition = (
+      length(github_repository_ruleset.main[0].rules[0].pull_request) == 0 &&
+      github_repository_ruleset.main[0].rules[0].required_signatures &&
+      github_repository_ruleset.main[0].rules[0].required_linear_history
+    )
     error_message = "Disabling pull requests must preserve the other requirements."
   }
 }
@@ -63,7 +98,7 @@ run "omit_ruleset" {
   }
 
   assert {
-    condition     = length(restapi_object.main) == 0
+    condition     = length(github_repository_ruleset.main) == 0
     error_message = "manage_ruleset=false must omit the ruleset."
   }
 }
@@ -82,11 +117,6 @@ run "custom_configuration" {
       rules = [{
         type = "pull_request"
         parameters = merge(jsondecode(file("tests/fixtures/main-ruleset.json")).rules[4].parameters, {
-          require_extra_approval_for_unattributed_changes = false
-          dismissal_restriction = {
-            enabled        = true
-            allowed_actors = [{ id = 789, type = "Team" }]
-          }
           required_approving_review_count   = 2
           dismiss_stale_reviews_on_push     = true
           require_code_owner_review         = true
@@ -104,8 +134,36 @@ run "custom_configuration" {
   }
 
   assert {
-    condition     = restapi_object.main[0].data == jsonencode(var.ruleset)
-    error_message = "Every custom field must reach the API, including dismissal actors and the unattributed-change approval setting."
+    condition = (
+      github_repository_ruleset.main[0].name == "release" &&
+      github_repository_ruleset.main[0].enforcement == "disabled" &&
+      github_repository_ruleset.main[0].conditions[0].ref_name[0].include == tolist(["refs/heads/release/*"]) &&
+      github_repository_ruleset.main[0].conditions[0].ref_name[0].exclude == tolist(["refs/heads/release/test"]) &&
+      github_repository_ruleset.main[0].bypass_actors[0].actor_id == 123 &&
+      github_repository_ruleset.main[0].bypass_actors[0].actor_type == "Integration" &&
+      github_repository_ruleset.main[0].bypass_actors[0].bypass_mode == "pull_request"
+    )
+    error_message = "Custom ruleset identity, conditions, and bypass actors must reach the resource."
+  }
+
+  assert {
+    condition = (
+      !github_repository_ruleset.main[0].rules[0].deletion &&
+      !github_repository_ruleset.main[0].rules[0].non_fast_forward &&
+      !github_repository_ruleset.main[0].rules[0].required_linear_history &&
+      !github_repository_ruleset.main[0].rules[0].required_signatures
+    )
+    error_message = "Rules omitted from the object must not be enabled."
+  }
+
+  assert {
+    condition = jsonencode(github_repository_ruleset.main[0].rules[0].pull_request[0]) == jsonencode(merge(
+      { for key, value in var.ruleset.rules[0].parameters : key => value
+        if !contains(["dismissal_restriction", "require_extra_approval_for_unattributed_changes", "required_reviewers"], key)
+      },
+      { required_reviewers = [for reviewer in var.ruleset.rules[0].parameters.required_reviewers : merge(reviewer, { reviewer = [reviewer.reviewer] })] }
+    ))
+    error_message = "Custom review settings, merge methods, and team reviewers must reach the resource."
   }
 }
 
@@ -118,7 +176,7 @@ run "force_signatures_when_omitted" {
   }
 
   assert {
-    condition     = jsondecode(restapi_object.main[0].data).rules == [{ type = "required_signatures" }]
+    condition     = github_repository_ruleset.main[0].rules[0].required_signatures
     error_message = "The signature override must add the rule when it is absent from the object."
   }
 }

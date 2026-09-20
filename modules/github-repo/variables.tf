@@ -174,7 +174,8 @@ variable "ruleset" {
   description = <<-EOT
     Default-branch ruleset in GitHub's API shape, captured from
     releasetools/homebrew-tap ruleset 23733932. Supports its five rule types.
-    The REST resource sends every configured field to GitHub and detects drift.
+    Includes the provider-supported settings. The two unsupported review
+    fields are omitted and remain outside Terraform's control; see the README.
   EOT
   type = object({
     name        = string
@@ -204,18 +205,10 @@ variable "ruleset" {
           file_patterns     = list(string)
           minimum_approvals = number
         }))
-        require_code_owner_review = bool
-        dismissal_restriction = object({
-          enabled = bool
-          allowed_actors = list(object({
-            id   = number
-            type = string
-          }))
-        })
-        require_last_push_approval                      = bool
-        required_review_thread_resolution               = bool
-        require_extra_approval_for_unattributed_changes = bool
-        allowed_merge_methods                           = list(string)
+        require_code_owner_review         = bool
+        require_last_push_approval        = bool
+        required_review_thread_resolution = bool
+        allowed_merge_methods             = list(string)
       }))
     }))
   })
@@ -239,18 +232,13 @@ variable "ruleset" {
       {
         type = "pull_request"
         parameters = {
-          required_approving_review_count = 0
-          dismiss_stale_reviews_on_push   = false
-          required_reviewers              = []
-          require_code_owner_review       = false
-          dismissal_restriction = {
-            enabled        = false
-            allowed_actors = []
-          }
-          require_last_push_approval                      = false
-          required_review_thread_resolution               = false
-          require_extra_approval_for_unattributed_changes = true
-          allowed_merge_methods                           = ["squash", "rebase"]
+          required_approving_review_count   = 0
+          dismiss_stale_reviews_on_push     = false
+          required_reviewers                = []
+          require_code_owner_review         = false
+          require_last_push_approval        = false
+          required_review_thread_resolution = false
+          allowed_merge_methods             = ["squash", "rebase"]
         }
       },
     ]
