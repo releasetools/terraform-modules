@@ -21,10 +21,16 @@ org it sets, on that org:
 - `GH_APP_CLIENT_ID` and `GH_APP_ID` (variables), `GH_APP_PRIVATE_KEY` (secret).
 
 A workflow mints a token from these with `actions/create-github-app-token`. The
-App's permissions live in `manifest.json`: Actions, Administration, Issues, and
-Environments write; Contents, Metadata, and Secrets read; plus org Secrets read.
-(Managing deployment environments needs Actions, not just Administration —
-GitHub gates the environments API behind the Actions permission.)
+App's permissions live in `manifest.json`: Actions, Administration, Contents,
+Environments and Issues write; Metadata and Secrets read; plus org Secrets read.
+Managing deployment environments needs Actions, not just Administration, because
+GitHub gates the environments API behind the Actions permission. Contents write
+lets the App push to a repo it manages, which a mirror fed by filtered commits
+needs.
+
+Editing `manifest.json` changes Apps created from it afterwards. An App that
+already exists keeps the permissions it was created with; widen those in its
+settings page, then accept the request on each installation.
 
 Overrides (skip the prompt): `OWNER=<org>` (or your login for a personal app),
 `PORT`, `VISIBILITY`, `MANIFEST`.
