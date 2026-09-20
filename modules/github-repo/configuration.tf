@@ -29,38 +29,60 @@ resource "github_actions_repository_permissions" "this" {
   allowed_actions = var.allowed_actions
 }
 
-# Default-branch ruleset: block deletion and non-fast-forward, optionally require
-# signed commits and a PR (0 approvals) to update the branch. Set
-# ruleset_enforcement = "disabled" to seed existing history, then "active"; set
-# manage_ruleset = false to skip the ruleset entirely.
+locals {
+  ruleset_rules = { for rule in var.ruleset.rules : rule.type => rule.parameters }
+}
+
 resource "github_repository_ruleset" "main" {
   count       = var.manage_ruleset ? 1 : 0
-  name        = "main"
+  name        = var.ruleset.name
   repository  = github_repository.this.name
-  target      = "branch"
-  enforcement = var.ruleset_enforcement
+  target      = var.ruleset.target
+  enforcement = coalesce(var.ruleset_enforcement, var.ruleset.enforcement)
 
   conditions {
     ref_name {
-      include = ["~DEFAULT_BRANCH"]
-      exclude = []
+      include = var.ruleset.conditions.ref_name.include
+      exclude = var.ruleset.conditions.ref_name.exclude
+    }
+  }
+
+  dynamic "bypass_actors" {
+    for_each = var.ruleset.bypass_actors
+    content {
+      actor_id    = bypass_actors.value.actor_id
+      actor_type  = bypass_actors.value.actor_type
+      bypass_mode = bypass_actors.value.bypass_mode
     }
   }
 
   rules {
-    deletion            = true
-    non_fast_forward    = true
-    required_signatures = var.ruleset_required_signatures
+    deletion                = contains(keys(local.ruleset_rules), "deletion")
+    non_fast_forward        = contains(keys(local.ruleset_rules), "non_fast_forward")
+    required_linear_history = contains(keys(local.ruleset_rules), "required_linear_history")
+    required_signatures     = coalesce(var.ruleset_required_signatures, contains(keys(local.ruleset_rules), "required_signatures"))
 
     dynamic "pull_request" {
-      for_each = var.ruleset_require_pull_request ? [1] : []
+      for_each = var.ruleset_require_pull_request ? { for type, parameters in local.ruleset_rules : type => parameters if type == "pull_request" } : {}
       content {
-        required_approving_review_count   = 0
-        dismiss_stale_reviews_on_push     = false
-        require_code_owner_review         = false
-        require_last_push_approval        = false
-        required_review_thread_resolution = false
-        allowed_merge_methods             = var.ruleset_allowed_merge_methods
+        required_approving_review_count   = pull_request.value.required_approving_review_count
+        dismiss_stale_reviews_on_push     = pull_request.value.dismiss_stale_reviews_on_push
+        require_code_owner_review         = pull_request.value.require_code_owner_review
+        require_last_push_approval        = pull_request.value.require_last_push_approval
+        required_review_thread_resolution = pull_request.value.required_review_thread_resolution
+        allowed_merge_methods             = coalesce(var.ruleset_allowed_merge_methods, pull_request.value.allowed_merge_methods)
+
+        dynamic "required_reviewers" {
+          for_each = pull_request.value.required_reviewers
+          content {
+            reviewer {
+              id   = required_reviewers.value.reviewer.id
+              type = required_reviewers.value.reviewer.type
+            }
+            file_patterns     = required_reviewers.value.file_patterns
+            minimum_approvals = required_reviewers.value.minimum_approvals
+          }
+        }
       }
     }
   }

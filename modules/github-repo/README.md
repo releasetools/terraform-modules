@@ -53,10 +53,76 @@ check; then the module needs no secret permissions.
 `github_owner` and `name` are required. Everything else has a default: the
 repository settings (visibility, features, merge buttons, sign-off), `labels`
 (GitHub's stock set, managed authoritatively), `environments`, `allowed_actions`,
-`ruleset_enforcement`, and `required_secrets`. The ruleset and Actions are
-toggleable: `manage_ruleset`, `ruleset_require_pull_request`,
-`ruleset_required_signatures`, and `actions_enabled` (all default to the secure
-behavior). See `variables.tf`.
+`ruleset`, and `required_secrets`. `manage_ruleset` and `actions_enabled` both
+default to `true`. See [`variables.tf`](variables.tf) for the full input definitions.
+
+## Default branch ruleset
+
+Every repository gets the `main` ruleset by default. The `ruleset` variable holds
+the configuration captured from
+[`releasetools/homebrew-tap` ruleset 23733932](https://github.com/releasetools/homebrew-tap/rules/23733932)
+on 2026-09-20, in GitHub's API shape. It contains the writable configuration;
+repository identity, timestamps, and other response metadata are omitted.
+
+| Setting | Default |
+| --- | --- |
+| Enforcement | `active` |
+| Branches | `include = ["~DEFAULT_BRANCH"]`, `exclude = []` |
+| Bypass actors | None |
+| Deletion and force pushes | Blocked |
+| Linear history and signed commits | Required |
+| Pull requests | Required, with 0 approving reviews |
+| Merge methods | `squash`, `rebase` |
+| Stale review dismissal, code owner review, last push approval, resolved review threads | All `false` |
+| Required reviewers | None |
+
+The repository's merge buttons are separate inputs. `allow_rebase_merge = true`
+enables the rebase button; the default repository settings enable squash merges.
+The ruleset blocks merge commits on matching branches even when the repository
+allows that button elsewhere.
+
+Copy the `ruleset` default from `variables.tf` to customize its full configuration.
+Its `rules` list supports the five captured rule types. Omitting a rule removes
+that requirement. The existing inputs take precedence over the object:
+
+| Input | Behavior |
+| --- | --- |
+| `manage_ruleset = false` | Omit the ruleset |
+| `ruleset_enforcement` | Override enforcement; `null` uses the object |
+| `ruleset_require_pull_request = false` | Omit the pull request rule |
+| `ruleset_required_signatures` | Override the signature requirement; `null` uses the object |
+| `ruleset_allowed_merge_methods` | Override the pull request merge methods; `null` uses the object |
+
+For example, seeding a repository with existing history uses:
+
+```hcl
+ruleset_enforcement = "disabled"
+```
+
+Set it to `"active"` after pushing the history. `manage_ruleset = false` removes
+an existing managed ruleset from GitHub on the next apply.
+
+### Provider limitation
+
+The captured pull request parameters also contain
+`dismissal_restriction = { enabled = false, allowed_actors = [] }` and
+`require_extra_approval_for_unattributed_changes = true`.
+The [GitHub provider schema](https://github.com/integrations/terraform-provider-github/blob/v6.13.0/github/resource_github_repository_ruleset.go)
+does not expose these two fields. The variable retains their observed values and
+rejects overrides, but Terraform does not send them to GitHub or detect drift in
+them. The module therefore captures the full configuration without guaranteeing
+enforcement of those two fields.
+
+### Existing rulesets
+
+Import a ruleset already on a repository before applying this module to it:
+
+```sh
+terraform import 'module.repo.github_repository_ruleset.main[0]' homebrew-tap:23733932
+```
+
+The repository itself must also be in the module's state. Adjust the module
+address and repository name to match the caller.
 
 ## Outputs
 
@@ -66,7 +132,7 @@ behavior). See `variables.tf`.
 ## Requirements
 
 - Terraform >= 1.10
-- `integrations/github` ~> 6.0
+- `integrations/github` ~> 6.13
 - `hashicorp/http` ~> 3.0 (used to detect the owner type for the secret check)
 
 See [`examples/complete`](examples/complete) for a runnable example.
