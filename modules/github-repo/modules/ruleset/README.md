@@ -14,7 +14,7 @@ provider "github" {
 module "main_rules" {
   source = "git::ssh://git@github.com/releasetools/terraform-modules.git//modules/github-repo/modules/ruleset?ref=v0.3.0"
 
-  repository = "homebrew-tap"
+  repository = "my-service"
 }
 ```
 
@@ -28,10 +28,7 @@ Passing `null` uses those defaults.
 ## Defaults
 
 The submodule applies the `main` ruleset to the supplied repository. The
-`ruleset` variable holds the provider-supported configuration captured from
-[`releasetools/homebrew-tap` ruleset 23733932](https://github.com/releasetools/homebrew-tap/rules/23733932)
-on 2026-09-20, in GitHub's API shape. It contains the writable configuration;
-repository identity, timestamps, and other response metadata are omitted.
+`ruleset` variable holds writable settings in GitHub's API shape.
 
 | Setting | Default |
 | --- | --- |
@@ -44,14 +41,16 @@ repository identity, timestamps, and other response metadata are omitted.
 | Merge methods | `squash`, `rebase` |
 | Stale review dismissal, code owner review, last push approval, resolved review threads | All `false` |
 | Required reviewers | None |
+| Required status checks | None |
 
 The repository must enable the merge methods callers want to use. The ruleset
 blocks merge commits on matching branches even when the repository enables
 that button. This submodule manages only the ruleset.
 
 Copy the `ruleset` default from `variables.tf` to customize the managed settings.
-Its `rules` list supports the five captured rule types. Omitting a rule removes
-that requirement. These inputs take precedence over the object:
+Its `rules` list supports `deletion`, `non_fast_forward`, `required_linear_history`,
+`required_signatures`, `pull_request`, and `required_status_checks`. Omitting a rule
+removes that requirement. These inputs take precedence over the object:
 
 | Input | Behavior |
 | --- | --- |
@@ -68,6 +67,65 @@ ruleset_enforcement = "disabled"
 
 Set it to `"active"` after pushing the history.
 
+### Required status checks
+
+Add a `required_status_checks` entry to `ruleset.rules`. The module creates a
+provider `required_check` block for each check. Names and optional integration
+IDs can come from caller variables or other Terraform expressions.
+
+This example keeps the default protections and requires `allow`:
+
+```hcl
+variable "required_checks" {
+  type = list(object({
+    context        = string
+    integration_id = optional(number)
+  }))
+  default = [{ context = "allow", integration_id = 15368 }]
+}
+
+module "main_rules" {
+  source = "git::ssh://git@github.com/releasetools/terraform-modules.git//modules/github-repo/modules/ruleset?ref=v0.3.0"
+
+  repository = "my-service"
+  ruleset = {
+    name        = "main"
+    target      = "branch"
+    enforcement = "active"
+    conditions = {
+      ref_name = { include = ["~DEFAULT_BRANCH"], exclude = [] }
+    }
+    bypass_actors = []
+    rules = [
+      { type = "deletion" },
+      { type = "non_fast_forward" },
+      { type = "required_linear_history" },
+      { type = "required_signatures" },
+      { type = "pull_request", parameters = {} },
+      {
+        type = "required_status_checks"
+        parameters = {
+          strict_required_status_checks_policy = false
+          do_not_enforce_on_create              = false
+          required_status_checks               = var.required_checks
+        }
+      },
+    ]
+  }
+}
+```
+
+The same `ruleset` object works with the parent `github-repo` module.
+An empty pull request `parameters` object uses the defaults shown above.
+
+`integration_id` is optional. Set it to require the check from a particular
+GitHub App. The two policy flags default to `false`: checks need not run against
+the latest target branch, and GitHub enforces them on branch creation.
+
+A status-check rule requires at least one check with a nonempty `context`.
+Omit the rule to require no checks. This module configures the requirement;
+the repository's CI must publish the named check.
+
 ### Unmanaged review settings
 
 `dismissal_restriction` and `require_extra_approval_for_unattributed_changes`
@@ -77,17 +135,12 @@ does not expose them. Terraform neither configures them nor detects their drift.
 GitHub determines their values when the request omits them; omission does not
 mean disabling either setting.
 
-The captured source ruleset has dismissal restrictions disabled and extra
-approval for unattributed changes enabled.
-[captured-main-ruleset.json](captured-main-ruleset.json) records those values
-as reference data; the module manages the remaining settings.
-
 ### Existing rulesets
 
 Import a ruleset already on a repository before applying this module to it:
 
 ```sh
-terraform import 'module.main_rules.github_repository_ruleset.main' homebrew-tap:23733932
+terraform import 'module.main_rules.github_repository_ruleset.main' my-service:123456
 ```
 
 Adjust the module address and repository name to match the caller. The repository

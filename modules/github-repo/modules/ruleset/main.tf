@@ -30,6 +30,22 @@ resource "github_repository_ruleset" "main" {
     required_linear_history = contains(keys(local.ruleset_rules), "required_linear_history")
     required_signatures     = coalesce(var.ruleset_required_signatures, contains(keys(local.ruleset_rules), "required_signatures"))
 
+    dynamic "required_status_checks" {
+      for_each = { for type, parameters in local.ruleset_rules : type => parameters if type == "required_status_checks" }
+      content {
+        strict_required_status_checks_policy = required_status_checks.value.strict_required_status_checks_policy
+        do_not_enforce_on_create             = required_status_checks.value.do_not_enforce_on_create
+
+        dynamic "required_check" {
+          for_each = required_status_checks.value.required_status_checks
+          content {
+            context        = required_check.value.context
+            integration_id = required_check.value.integration_id
+          }
+        }
+      }
+    }
+
     dynamic "pull_request" {
       for_each = var.ruleset_require_pull_request ? { for type, parameters in local.ruleset_rules : type => parameters if type == "pull_request" } : {}
       content {

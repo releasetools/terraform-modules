@@ -5,8 +5,7 @@ variable "repository" {
 
 variable "ruleset" {
   description = <<-EOT
-    Default-branch ruleset in GitHub's API shape, captured from
-    releasetools/homebrew-tap ruleset 23733932. Supports its five rule types.
+    Branch ruleset in GitHub's API shape, including required status checks.
     Includes the provider-supported settings. The two unsupported review
     fields are omitted and remain outside Terraform's control; see the README.
   EOT
@@ -28,20 +27,26 @@ variable "ruleset" {
     rules = list(object({
       type = string
       parameters = optional(object({
-        required_approving_review_count = number
-        dismiss_stale_reviews_on_push   = bool
-        required_reviewers = list(object({
+        required_approving_review_count = optional(number, 0)
+        dismiss_stale_reviews_on_push   = optional(bool, false)
+        required_reviewers = optional(list(object({
           reviewer = object({
             id   = number
             type = string
           })
           file_patterns     = list(string)
           minimum_approvals = number
-        }))
-        require_code_owner_review         = bool
-        require_last_push_approval        = bool
-        required_review_thread_resolution = bool
-        allowed_merge_methods             = list(string)
+        })), [])
+        require_code_owner_review            = optional(bool, false)
+        require_last_push_approval           = optional(bool, false)
+        required_review_thread_resolution    = optional(bool, false)
+        allowed_merge_methods                = optional(list(string), ["squash", "rebase"])
+        strict_required_status_checks_policy = optional(bool, false)
+        do_not_enforce_on_create             = optional(bool, false)
+        required_status_checks = optional(list(object({
+          context        = string
+          integration_id = optional(number)
+        })), [])
       }))
     }))
   })
@@ -86,11 +91,22 @@ variable "ruleset" {
     condition = (
       length(distinct([for rule in var.ruleset.rules : rule.type])) == length(var.ruleset.rules) &&
       alltrue([for rule in var.ruleset.rules :
-        contains(["deletion", "non_fast_forward", "required_linear_history", "required_signatures", "pull_request"], rule.type) &&
-        (rule.type == "pull_request" ? rule.parameters != null : rule.parameters == null)
+        contains(["deletion", "non_fast_forward", "required_linear_history", "required_signatures", "pull_request", "required_status_checks"], rule.type) &&
+        (contains(["pull_request", "required_status_checks"], rule.type) ? rule.parameters != null : rule.parameters == null)
       ])
     )
-    error_message = "ruleset rules must use each supported type at most once; only pull_request requires parameters."
+    error_message = "ruleset rules must use each supported type at most once; pull_request and required_status_checks require parameters, while other rules omit them."
+  }
+
+  validation {
+    condition = alltrue([for rule in var.ruleset.rules :
+      rule.type == "required_status_checks" ? try(
+        length(rule.parameters.required_status_checks) > 0 &&
+        alltrue([for check in rule.parameters.required_status_checks : trimspace(check.context) != ""]),
+        false
+      ) : true
+    ])
+    error_message = "required_status_checks requires at least one check with a nonempty context."
   }
 }
 

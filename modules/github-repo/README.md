@@ -68,11 +68,12 @@ inputs. The submodule owns the typed configuration, defaults, and validation.
 The default ruleset requires linear, signed history and pull requests with zero
 approvals. It permits squash and rebase merges and blocks deletion and force
 pushes. See the [submodule documentation](modules/ruleset/README.md) for the full
-configuration and the two unmanaged review settings.
+configuration and the two unmanaged review settings. To require a CI check such
+as `allow`, add a [`required_status_checks` rule](modules/ruleset/README.md#required-status-checks).
 
 Set `ruleset` to an object matching the submodule's
 [`variables.tf`](modules/ruleset/variables.tf) to customize the rules. `null`
-uses the captured defaults. These inputs take precedence over that object:
+uses the submodule defaults. These inputs take precedence over that object:
 
 | Input | Behavior |
 | --- | --- |
@@ -94,7 +95,7 @@ ruleset during upgrades.
 Import an existing ruleset that Terraform does not yet manage:
 
 ```sh
-terraform import 'module.repo.module.ruleset[0].github_repository_ruleset.main' homebrew-tap:23733932
+terraform import 'module.repo.module.ruleset[0].github_repository_ruleset.main' my-service:123456
 ```
 
 The repository itself must also be in this module's state. To manage only its

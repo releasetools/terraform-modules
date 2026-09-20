@@ -11,7 +11,9 @@ GitHub provider. To permit merge commits, remove
 required_linear_history from ruleset.rules and set
 ruleset_allowed_merge_methods to ["squash", "merge"]. The module uses the
 GitHub provider through a ruleset submodule that also accepts existing
-repositories directly. Terraform maps existing ruleset state to the submodule.
+repositories directly. Callers can require status checks such as allow,
+with optional integration IDs and configurable enforcement policies.
+Terraform maps existing ruleset state to the submodule.
 Dismissal restrictions and extra approval for unattributed changes remain
 outside Terraform's control. GitHub provider 6.13 or later within version 6 is required.
 

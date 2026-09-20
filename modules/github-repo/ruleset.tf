@@ -24,7 +24,7 @@ moved {
 variable "ruleset" {
   type        = any
   default     = null
-  description = "Ruleset configuration validated by modules/ruleset. Null uses the submodule's captured defaults."
+  description = "Ruleset configuration validated by modules/ruleset. Null uses the submodule's defaults."
 }
 
 variable "ruleset_enforcement" {
