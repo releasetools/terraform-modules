@@ -17,7 +17,7 @@ and pin a tag with `?ref=`:
 
 ```hcl
 module "repo" {
-  source = "git::https://github.com/releasetools/terraform-modules.git//modules/github-repo?ref=v0.1.0"
+  source = "git::https://github.com/releasetools/terraform-modules.git//modules/github-repo?ref=v0.2.0"
   # ...
 }
 ```
