@@ -22,11 +22,15 @@ org it sets, on that org:
 
 A workflow mints a token from these with `actions/create-github-app-token`. The
 App's permissions live in `manifest.json`: Actions, Administration, Contents,
-Environments and Issues write; Metadata and Secrets read; plus org Secrets read.
-Managing deployment environments needs Actions, not just Administration, because
-GitHub gates the environments API behind the Actions permission. Contents write
-lets the App push to a repo it manages, which a mirror fed by filtered commits
-needs.
+Environments, Issues and Pull requests write; Metadata and Secrets read; plus
+org Secrets read. Managing deployment environments needs Actions, not just
+Administration, because GitHub gates the environments API behind the Actions
+permission. Contents write lets the App push to a repo it manages, which a
+mirror fed by filtered commits needs. Pull requests write lets it open one: a
+workflow using `GITHUB_TOKEN` cannot, where an organization disallows Actions
+from creating pull requests, and a pull request it does open has its checks
+held pending approval, which is no use for an automated bump whose whole point
+is that its tests run.
 
 Editing `manifest.json` changes Apps created from it afterwards. An App that
 already exists keeps the permissions it was created with; widen those in its
