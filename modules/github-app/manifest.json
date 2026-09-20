@@ -10,7 +10,7 @@
     "administration": "write",
     "environments": "write",
     "issues": "write",
-    "contents": "read",
+    "contents": "write",
     "metadata": "read",
     "secrets": "read",
     "organization_secrets": "read"
