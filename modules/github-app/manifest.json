@@ -11,6 +11,7 @@
     "environments": "write",
     "issues": "write",
     "contents": "write",
+    "pull_requests": "write",
     "metadata": "read",
     "secrets": "read",
     "organization_secrets": "read"
