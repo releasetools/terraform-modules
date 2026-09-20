@@ -29,3 +29,14 @@ Each module's own README has the full input/output reference.
 One tag stream covers every module. A tag like `v0.1.0` pins the whole repo, so a
 consumer that bumps `?ref=` moves all the modules it uses together. Release with
 semver tags; consumers pin `?ref=`.
+
+The root `VERSION` file holds the next release version for both modules.
+`.releasetools.yaml` declares one project with a shared `CHANGELOG.md`.
+Pull requests run the releasetools version and changelog guards.
+
+This repository follows the
+[releasetools conventions](https://github.com/releasetools/conventions).
+Use `/release-notes:write` from the `release-notes` plugin in the
+`release-tools` marketplace to write a change's note in its PR and changelog.
+Before tagging, use `/release-notes:prepare` to check the release's full notes.
+Tags use `v` followed by the version in `VERSION`; tagging remains a manual step.

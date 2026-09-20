@@ -1,0 +1,12 @@
+# How this repository releases, read by every releasetools tool.
+#
+# Conventions: https://github.com/releasetools/conventions
+# Tools:       https://github.com/releasetools
+
+projects:
+  - path: ./
+    manifest: VERSION
+    changelog: CHANGELOG.md
+
+conventions:
+  except: []
