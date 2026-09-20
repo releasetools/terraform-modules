@@ -30,66 +30,43 @@ resource "github_actions_repository_permissions" "this" {
 }
 
 locals {
-  ruleset_rules = { for rule in var.ruleset.rules : rule.type => rule.parameters }
+  ruleset_rules = concat(
+    [for rule in var.ruleset.rules : merge(
+      { type = rule.type },
+      rule.type == "pull_request" ? {
+        parameters = merge(rule.parameters, {
+          allowed_merge_methods = coalesce(var.ruleset_allowed_merge_methods, rule.parameters.allowed_merge_methods)
+        })
+      } : {}
+      ) if(
+      (rule.type != "pull_request" || var.ruleset_require_pull_request) &&
+      (rule.type != "required_signatures" || var.ruleset_required_signatures != false)
+    )],
+    var.ruleset_required_signatures == true && !contains([for rule in var.ruleset.rules : rule.type], "required_signatures") ? [{ type = "required_signatures" }] : []
+  )
 }
 
-resource "github_repository_ruleset" "main" {
-  count       = var.manage_ruleset ? 1 : 0
-  name        = var.ruleset.name
-  repository  = github_repository.this.name
-  target      = var.ruleset.target
-  enforcement = coalesce(var.ruleset_enforcement, var.ruleset.enforcement)
+resource "restapi_object" "main" {
+  count = var.manage_ruleset ? 1 : 0
+  path  = "/repos/${var.github_owner}/${github_repository.this.name}/rulesets"
+  data = jsonencode(merge(var.ruleset, {
+    enforcement = coalesce(var.ruleset_enforcement, var.ruleset.enforcement)
+    rules       = local.ruleset_rules
+  }))
 
-  conditions {
-    ref_name {
-      include = var.ruleset.conditions.ref_name.include
-      exclude = var.ruleset.conditions.ref_name.exclude
-    }
-  }
-
-  dynamic "bypass_actors" {
-    for_each = var.ruleset.bypass_actors
-    content {
-      actor_id    = bypass_actors.value.actor_id
-      actor_type  = bypass_actors.value.actor_type
-      bypass_mode = bypass_actors.value.bypass_mode
-    }
-  }
-
-  rules {
-    deletion                = contains(keys(local.ruleset_rules), "deletion")
-    non_fast_forward        = contains(keys(local.ruleset_rules), "non_fast_forward")
-    required_linear_history = contains(keys(local.ruleset_rules), "required_linear_history")
-    required_signatures     = coalesce(var.ruleset_required_signatures, contains(keys(local.ruleset_rules), "required_signatures"))
-
-    dynamic "pull_request" {
-      for_each = var.ruleset_require_pull_request ? { for type, parameters in local.ruleset_rules : type => parameters if type == "pull_request" } : {}
-      content {
-        required_approving_review_count   = pull_request.value.required_approving_review_count
-        dismiss_stale_reviews_on_push     = pull_request.value.dismiss_stale_reviews_on_push
-        require_code_owner_review         = pull_request.value.require_code_owner_review
-        require_last_push_approval        = pull_request.value.require_last_push_approval
-        required_review_thread_resolution = pull_request.value.required_review_thread_resolution
-        allowed_merge_methods             = coalesce(var.ruleset_allowed_merge_methods, pull_request.value.allowed_merge_methods)
-
-        dynamic "required_reviewers" {
-          for_each = pull_request.value.required_reviewers
-          content {
-            reviewer {
-              id   = required_reviewers.value.reviewer.id
-              type = required_reviewers.value.reviewer.type
-            }
-            file_patterns     = required_reviewers.value.file_patterns
-            minimum_approvals = required_reviewers.value.minimum_approvals
-          }
-        }
-      }
-    }
-  }
+  # GitHub returns this metadata alongside the writable ruleset configuration.
+  ignore_changes_to = [
+    "id", "node_id", "source", "source_type", "created_at", "updated_at",
+    "current_user_can_bypass", "_links",
+  ]
 }
 
-# The ruleset gained a `count` in v0.2.0; keep existing state from recreating it.
-moved {
+# Import existing rulesets at restapi_object.main[0] before applying this module.
+# Forgetting the old address must not delete the ruleset from GitHub.
+removed {
   from = github_repository_ruleset.main
-  to   = github_repository_ruleset.main[0]
+
+  lifecycle {
+    destroy = false
+  }
 }

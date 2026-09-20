@@ -9,10 +9,12 @@ and pull requests, permits squash and rebase merges, and blocks deletion
 and force pushes. The ruleset input captures the GitHub API configuration
 and supports customization. To permit merge commits, remove
 required_linear_history from ruleset.rules and set
-ruleset_allowed_merge_methods to ["squash", "merge"]. The module requires
-GitHub provider 6.13 or later within version 6. The dismissal_restriction
-and require_extra_approval_for_unattributed_changes fields are captured
-but cannot be enforced by the provider.
+ruleset_allowed_merge_methods to ["squash", "merge"]. Configure the
+Mastercard/restapi provider alongside the GitHub provider; both can use the
+same token. Existing rulesets must be imported at restapi_object.main[0]
+before applying. The module sends every configured rule parameter and repairs
+drift, including dismissal restrictions and extra approval for unattributed
+changes.
 
 ### Added
 

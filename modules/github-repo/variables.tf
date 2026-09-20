@@ -174,9 +174,7 @@ variable "ruleset" {
   description = <<-EOT
     Default-branch ruleset in GitHub's API shape, captured from
     releasetools/homebrew-tap ruleset 23733932. Supports its five rule types.
-    The provider cannot manage dismissal_restriction or
-    require_extra_approval_for_unattributed_changes; their captured values
-    are fixed by validation. See the README for that limitation.
+    The REST resource sends every configured field to GitHub and detects drift.
   EOT
   type = object({
     name        = string
@@ -210,8 +208,8 @@ variable "ruleset" {
         dismissal_restriction = object({
           enabled = bool
           allowed_actors = list(object({
-            actor_id   = number
-            actor_type = string
+            id   = number
+            type = string
           }))
         })
         require_last_push_approval                      = bool
@@ -272,15 +270,6 @@ variable "ruleset" {
       ])
     )
     error_message = "ruleset rules must use each supported type at most once; only pull_request requires parameters."
-  }
-
-  validation {
-    condition = alltrue([for rule in var.ruleset.rules : rule.parameters == null ? true : (
-      !rule.parameters.dismissal_restriction.enabled &&
-      length(rule.parameters.dismissal_restriction.allowed_actors) == 0 &&
-      rule.parameters.require_extra_approval_for_unattributed_changes
-    )])
-    error_message = "The GitHub provider cannot manage dismissal_restriction or require_extra_approval_for_unattributed_changes. Keep their captured values: disabled, no actors, and true."
   }
 }
 
