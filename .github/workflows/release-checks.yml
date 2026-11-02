@@ -10,7 +10,12 @@ permissions:
 
 jobs:
   release-checks:
-    runs-on: ubuntu-latest
+    name: release-checks (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-26.04]
     steps:
       - uses: actions/checkout@v6
         with:
